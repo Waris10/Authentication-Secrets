@@ -41,7 +41,8 @@ const userSchema = new mongoose.Schema(
     email : String,
     password : String,
     googleId : String,
-    facebookId: String
+    facebookId: String,
+    secret: String
   });
 
   userSchema.plugin(passportLocalMongoose);
@@ -51,7 +52,8 @@ const userSchema = new mongoose.Schema(
 
   passport.use(User.createStrategy());
 
-  // use static serialize and deserialize of model for passport session support
+  // use static serialize and deserialize of model for passport session support;
+
   passport.serializeUser((user, cb) =>{
     process.nextTick(() =>{
       return cb(null, {
@@ -88,7 +90,7 @@ const userSchema = new mongoose.Schema(
     // This option tells the strategy to use the userinfo endpoint instead
     userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
   }, (accessToken, refreshToken, profile, cb) =>{
-    console.log( profile );
+    // console.log( profile );
     User.findOrCreate({ googleId: profile.id }, (err, user) =>{
       return cb(err, user);
     });
@@ -100,9 +102,10 @@ const userSchema = new mongoose.Schema(
 passport.use(new FacebookStrategy({
   clientID: process.env.APP_ID,
   clientSecret: process.env.SECRET_KEY,
-  callbackURL: "http://localhost:3000/auth/facebook/secrets"
+  callbackURL: "http://localhost:3000/auth/facebook/secrets",
+  enableProof: true
 }, (accessToken, refreshToken, profile, cb) =>{
-  console.log( profile );
+  // console.log( profile );
   User.findOrCreate({ facebookId: profile.id }, (err, user) =>{
     return cb(err, user);
   });
@@ -144,11 +147,43 @@ app.get('/register', (req, res) =>{
 });
 
 app.get('/secrets', (req, res) =>{
+  User.find({'secret':{ $ne: null}}, (err, foundUsers) =>{
+    if (err) {
+      console.log(err);
+    } else {
+      if (foundUsers) {
+        res.render('secrets', {
+           usersWithSecrets: foundUsers
+         });
+      }
+    }
+  });
+});
+
+
+app.get('/submit', (req, res) =>{
   if (req.isAuthenticated()) {
-    res.render('secrets');
+    res.render('submit');
   } else {
     res.redirect('/login');
   }
+});
+
+app.post('/submit', (req, res) =>{
+  const submittedSecret = req.body.secret;
+  console.log(req.user.id);
+  User.findById( req.user.id, (err, foundUser) =>{
+    if (err) {
+      console.log(err);
+    } else {
+      if (foundUser) {
+        foundUser.secret = submittedSecret;
+        foundUser.save(() =>{
+          res.redirect('/secrets');
+        });
+      }
+    }
+  });
 });
 
 app.get('/logout',( req, res ) =>{
@@ -169,9 +204,9 @@ app.post('/register', (req, res) =>{
     } else {
       passport.authenticate('local')(req, res, () =>{
         res.redirect('/secrets')
-      })
+      });
     }
-  })
+  });
 });
 
 app.post('/login', (req, res) =>{
@@ -199,4 +234,4 @@ app.post('/login', (req, res) =>{
 
 app.listen(3000, () => {
   console.log('Server has started successfully');
-})
+});
